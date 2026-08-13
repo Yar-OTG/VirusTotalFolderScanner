@@ -36,3 +36,43 @@ Desktop-приложение на Python для массовой проверк�
    ```bash
    git clone [https://github.com/ВАШ_ЛОГИН/VirusTotal-Folder-Scanner.git](https://github.com/ВАШ_ЛОГИН/VirusTotal-Folder-Scanner.git)
    cd VirusTotal-Folder-Scanner
+
+
+   ## 🛡️ VirusTotal Folder Scanner (GUI)
+
+A Python desktop application for batch scanning files in selected folders for malware using the official **VirusTotal API v3**.
+
+![Python](https://img.shields.io/badge/Python-3.x-blue.svg)
+![CustomTkinter](https://img.shields.io/badge/UI-CustomTkinter-blueviolet.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+
+---
+
+## 🚀 Key Features
+
+* 📁 **Folder Scanning:** Automatic recursive traversal of all files and subdirectories.
+* ⚡ **SHA-256 Hash Checking:** Instant queries against the VirusTotal database without uploading the actual files.
+* 📊 **Report Export:** Save scanning results to a `.csv` file (compatible with Excel).
+* 🧵 **Multithreading:** The UI remains responsive during network requests.
+* 🎨 **Modern UI:** Windows 11 style dark theme powered by `CustomTkinter`.
+
+---
+
+## 📥 Download Executable (`.exe`)
+
+You can download the standalone Windows executable that doesn't require Python installation:
+👉 **[Download VirusTotal Scanner v1.0.1](../../releases)**
+
+---
+
+## 🛠️ Run from Source
+
+### Requirements
+* Python 3.10+
+* VirusTotal API Key (free at [virustotal.com](https://www.virustotal.com/))
+
+### Installation & Execution
+1. Clone the repository:
+   ```bash
+   git clone [https://github.com/YOUR_USERNAME/VirusTotal-Folder-Scanner.git](https://github.com/YOUR_USERNAME/VirusTotal-Folder-Scanner.git)
+   cd VirusTotal-Folder-Scanner
