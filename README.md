@@ -21,7 +21,7 @@ Desktop-приложение на Python для массовой проверк�
 ## 📥 Скачать готовый `.exe`
 
 Вы можете скачать готовый исполняемый файл для Windows, не требующий установки Python:
-👉 **[Скачать VirusTotal Scanner v1.0.0](../../releases)**
+👉 **[Скачать VirusTotal Scanner v1.0.1](../../releases)**
 
 ---
 
