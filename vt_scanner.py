@@ -1,86 +1,150 @@
+# ==============================================================================
+# Проект: VirusTotal Multi-Folder Scanner (GUI)
+# Версия: 1.1
+# Описание: Сканер папок на VirusTotal с сохранением ключа и выбором нескольких папок.
+# ==============================================================================
+
 import os
 import csv
+import json
 import hashlib
 import time
 import requests
 import threading
+import webbrowser
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 
-# Настройка внешнего вида
+# Настройки оформления
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+
+CONFIG_FILE = "config.json"
 
 class VirusTotalScannerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("VirusTotal Folder Scanner")
-        self.geometry("700x600")
+        self.title("VirusTotal Folder Scanner v1.1")
+        self.geometry("700x720")
         self.resizable(False, False)
 
-        self.api_key = ctk.StringVar()
-        self.folder_path = ctk.StringVar()
-        
-        # Список для хранения результатов сканирования (для CSV)
-        self.scan_results = []
+        # Переменные
+        self.selected_folders = [] # Список выбранных папок
+        self.scan_results = []     # Результаты для экспорта в CSV
 
-        # === Интерфейс ===
-        
-        # Заголовок
-        self.label_title = ctk.CTkLabel(self, text="VirusTotal Folder Scanner", font=ctk.CTkFont(size=22, weight="bold"))
-        self.label_title.pack(pady=(15, 10))
+        # --- ГЛАВНЫЙ ЗАГОЛОВОК ---
+        self.label_title = ctk.CTkLabel(
+            self, 
+            text="VirusTotal Multi-Folder Scanner", 
+            font=ctk.CTkFont(size=22, weight="bold")
+        )
+        self.label_title.pack(pady=(15, 5))
 
-        # Поле ввода API ключа
+        # --- БЛОК 1: API КЛЮЧ ---
         self.frame_api = ctk.CTkFrame(self)
-        self.frame_api.pack(fill="x", padx=20, pady=5)
+        self.frame_api.pack(fill="x", padx=20, pady=10)
 
-        self.label_api = ctk.CTkLabel(self.frame_api, text="API Key:", font=ctk.CTkFont(size=13))
-        self.label_api.pack(side="left", padx=10)
+        self.lbl_api = ctk.CTkLabel(self.frame_api, text="API Key VirusTotal:", font=ctk.CTkFont(weight="bold"))
+        self.lbl_api.pack(anchor="w", padx=15, pady=(10, 2))
 
-        self.entry_api = ctk.CTkEntry(self.frame_api, textvariable=self.api_key, show="*", width=450, placeholder_text="Вставьте ваш VirusTotal API Key")
-        self.entry_api.pack(side="left", padx=10, pady=10, fill="x", expand=True)
+        self.entry_api = ctk.CTkEntry(self.frame_api, placeholder_text="Вставьте ваш API-ключ сюда...", show="*")
+        self.entry_api.pack(fill="x", padx=15, pady=5)
 
-        # Выбор папки
-        self.frame_folder = ctk.CTkFrame(self)
-        self.frame_folder.pack(fill="x", padx=20, pady=5)
+        # Ссылка на получение ключа
+        self.lbl_link = ctk.CTkLabel(
+            self.frame_api, 
+            text="🔑 Нет ключа? Нажмите сюда, чтобы получить его на VirusTotal", 
+            font=ctk.CTkFont(size=12, underline=True),
+            cursor="hand2",
+            text_color="#1E90FF"
+        )
+        self.lbl_link.pack(anchor="w", padx=15, pady=(0, 10))
+        self.lbl_link.bind("<Button-1>", lambda e: webbrowser.open("https://www.virustotal.com/gui/my-apikey"))
 
-        self.btn_select_folder = ctk.CTkButton(self.frame_folder, text="Выбрать папку", command=self.select_folder, width=120)
-        self.btn_select_folder.pack(side="left", padx=10, pady=10)
+        # --- БЛОК 2: ВЫБОР ПАПОК ---
+        self.frame_folders = ctk.CTkFrame(self)
+        self.frame_folders.pack(fill="x", padx=20, pady=5)
 
-        self.entry_folder = ctk.CTkEntry(self.frame_folder, textvariable=self.folder_path, width=450, placeholder_text="Путь к папке")
-        self.entry_folder.pack(side="left", padx=10, fill="x", expand=True)
+        self.lbl_folders = ctk.CTkLabel(self.frame_folders, text="Папки для сканирования:", font=ctk.CTkFont(weight="bold"))
+        self.lbl_folders.pack(anchor="w", padx=15, pady=(10, 5))
 
-        # Кнопки управления (Запуск + Экспорт)
-        self.frame_actions = ctk.CTkFrame(self, fg_color="transparent")
-        self.frame_actions.pack(fill="x", padx=20, pady=10)
+        # Текстовое поле со списком добавленных папок
+        self.textbox_folders = ctk.CTkTextbox(self.frame_folders, height=80, state="disabled")
+        self.textbox_folders.pack(fill="x", padx=15, pady=5)
 
-        self.btn_start = ctk.CTkButton(self.frame_actions, text="Начать сканирование", command=self.start_scan_thread, font=ctk.CTkFont(size=14, weight="bold"), height=38, fg_color="#2FA572", hover_color="#1E6B4A")
-        self.btn_start.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        # Кнопки добавления и очистки папок
+        self.frame_folder_btns = ctk.CTkFrame(self.frame_folders, fg_color="transparent")
+        self.frame_folder_btns.pack(fill="x", padx=15, pady=(0, 10))
 
-        self.btn_export = ctk.CTkButton(self.frame_actions, text="Сохранить в CSV", command=self.export_to_csv, font=ctk.CTkFont(size=13), height=38, fg_color="#3B8ED0", state="disabled")
-        self.btn_export.pack(side="right", padx=(5, 0))
+        self.btn_add_folder = ctk.CTkButton(self.frame_folder_btns, text="➕ Добавить папку", command=self.add_folder)
+        self.btn_add_folder.pack(side="left", padx=(0, 10))
 
-        # Прогресс-бар и статус
-        self.progress = ctk.CTkProgressBar(self, orientation="horizontal")
-        self.progress.pack(fill="x", padx=20, pady=(5, 5))
-        self.progress.set(0)
+        self.btn_clear_folders = ctk.CTkButton(self.frame_folder_btns, text="🗑️ Очистить список", fg_color="#D32F2F", hover_color="#9A0007", command=self.clear_folders)
+        self.btn_clear_folders.pack(side="left")
 
-        self.label_status = ctk.CTkLabel(self, text="Готов к работе", font=ctk.CTkFont(size=12))
-        self.label_status.pack(pady=(0, 5))
+        # --- БЛОК 3: УПРАВЛЕНИЕ И ПРОГРЕСС ---
+        self.btn_start = ctk.CTkButton(self, text="🚀 Начать сканирование", font=ctk.CTkFont(size=15, weight="bold"), height=40, command=self.start_scan_thread)
+        self.btn_start.pack(fill="x", padx=20, pady=10)
 
-        # Окно логов/результатов
-        self.log_textbox = ctk.CTkTextbox(self, width=660, height=230, font=ctk.CTkFont(family="Consolas", size=12))
-        self.log_textbox.pack(padx=20, pady=(0, 15))
+        self.progress_bar = ctk.CTkProgressBar(self)
+        self.progress_bar.pack(fill="x", padx=20, pady=5)
+        self.progress_bar.set(0)
 
-    def select_folder(self):
+        # --- БЛОК 4: ЛОГ И РЕЗУЛЬТАТЫ ---
+        self.textbox_log = ctk.CTkTextbox(self, height=180)
+        self.textbox_log.pack(fill="both", expand=True, padx=20, pady=10)
+
+        self.btn_export = ctk.CTkButton(self, text="💾 Сохранить отчет в CSV", state="disabled", command=self.export_csv)
+        self.btn_export.pack(padx=20, pady=(0, 15))
+
+        # Загружаем сохраненный ключ при запуске
+        self.load_api_key()
+
+    # --- ЛОГИКА СОХРАНЕНИЯ / ЗАГРУЗКИ КЛЮЧА ---
+    def load_api_key(self):
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    saved_key = data.get("api_key", "")
+                    if saved_key:
+                        self.entry_api.insert(0, saved_key)
+            except Exception:
+                pass
+
+    def save_api_key(self, key):
+        try:
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump({"api_key": key}, f)
+        except Exception:
+            pass
+
+    # --- РАБОТА С ПАПКАМИ ---
+    def add_folder(self):
         folder = filedialog.askdirectory()
-        if folder:
-            self.folder_path.set(folder)
+        if folder and folder not in self.selected_folders:
+            self.selected_folders.append(folder)
+            self.update_folders_display()
 
+    def clear_folders(self):
+        self.selected_folders.clear()
+        self.update_folders_display()
+
+    def update_folders_display(self):
+        self.textbox_folders.configure(state="normal")
+        self.textbox_folders.delete("1.0", "end")
+        if self.selected_folders:
+            for f in self.selected_folders:
+                self.textbox_folders.insert("end", f"{f}\n")
+        else:
+            self.textbox_folders.insert("end", "Папки не выбраны...")
+        self.textbox_folders.configure(state="disabled")
+
+    # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
     def log(self, message):
-        self.log_textbox.insert("end", message + "\n")
-        self.log_textbox.see("end")
+        self.textbox_log.insert("end", message + "\n")
+        self.textbox_log.see("end")
 
     def get_file_hash(self, file_path):
         hasher = hashlib.sha256()
@@ -92,121 +156,96 @@ class VirusTotalScannerApp(ctk.CTk):
         except Exception:
             return None
 
+    # --- СКАНИРОВАНИЕ ---
     def start_scan_thread(self):
-        if not self.api_key.get().strip():
-            messagebox.showerror("Ошибка", "Введите API-ключ VirusTotal!")
-            return
-        if not self.folder_path.get().strip():
-            messagebox.showerror("Ошибка", "Выберите папку для сканирования!")
-            return
-
-        self.btn_start.configure(state="disabled")
-        self.btn_select_folder.configure(state="disabled")
-        self.btn_export.configure(state="disabled")
-        self.log_textbox.delete("1.0", "end")
-        self.scan_results.clear()
-        
         threading.Thread(target=self.scan_process, daemon=True).start()
 
     def scan_process(self):
-        api_key = self.api_key.get().strip()
-        folder = self.folder_path.get().strip()
+        api_key = self.entry_api.get().strip()
 
-        file_list = []
-        for root, _, files in os.walk(folder):
-            for file in files:
-                file_list.append(os.path.join(root, file))
-
-        total_files = len(file_list)
-        if total_files == 0:
-            self.log("[!] В выбранной папке нет файлов.")
-            self.reset_ui()
+        if not api_key:
+            messagebox.showerror("Ошибка", "Укажите VirusTotal API Key!")
             return
 
-        self.log(f"[*] Найдено файлов: {total_files}\n" + "="*50)
+        if not self.selected_folders:
+            messagebox.showerror("Ошибка", "Добавьте хотя бы одну папку для сканирования!")
+            return
+
+        # Сохраняем ключ для будущих запусков
+        self.save_api_key(api_key)
+
+        self.btn_start.configure(state="disabled")
+        self.btn_export.configure(state="disabled")
+        self.textbox_log.delete("1.0", "end")
+        self.scan_results.clear()
+
+        # Собираем все файлы со всех выбранных папок
+        files_to_scan = []
+        for folder in self.selected_folders:
+            for root, _, files in os.walk(folder):
+                for file in files:
+                    files_to_scan.append(os.path.join(root, file))
+
+        total_files = len(files_to_scan)
+        if total_files == 0:
+            self.log("⚠️ Выбранные папки пусты.")
+            self.btn_start.configure(state="normal")
+            return
+
+        self.log(f"🔍 Найдено файлов для проверки: {total_files}\n" + "-"*40)
+
+        url = "https://www.virustotal.com/api/v3/files/"
         headers = {"x-apikey": api_key}
 
-        for idx, file_path in enumerate(file_list, start=1):
+        for index, file_path in enumerate(files_to_scan, start=1):
             file_name = os.path.basename(file_path)
-            self.label_status.configure(text=f"Сканирование [{idx}/{total_files}]: {file_name}")
-            self.progress.set(idx / total_files)
+            self.log(f"[{index}/{total_files}] Проверка: {file_name}")
 
             file_hash = self.get_file_hash(file_path)
             if not file_hash:
-                self.log(f"[ОШИБКА ЧТЕНИЯ] {file_name}")
-                self.scan_results.append({
-                    "FileName": file_name, "Path": file_path, "Status": "Error Reading", "Malicious": 0, "SHA256": "N/A"
-                })
+                self.log("  ❌ Ошибка чтения файла (нет доступа).")
+                self.scan_results.append([file_name, file_path, "Ошибка чтения", "-"])
                 continue
 
-            url = f"https://www.virustotal.com/api/v3/files/{file_hash}"
             try:
-                response = requests.get(url, headers=headers)
-                
+                response = requests.get(url + file_hash, headers=headers)
                 if response.status_code == 200:
                     data = response.json()
                     stats = data['data']['attributes']['last_analysis_stats']
-                    malicious = stats['malicious']
-                    
-                    status_str = f"Malicious ({malicious})" if malicious > 0 else "Clean"
-                    if malicious > 0:
-                        self.log(f"[ОПАСНО: {malicious}] {file_name}")
-                    else:
-                        self.log(f"[ЧИСТО] {file_name}")
-
-                    self.scan_results.append({
-                        "FileName": file_name, "Path": file_path, "Status": status_str, "Malicious": malicious, "SHA256": file_hash
-                    })
-
+                    malicious = stats.get('malicious', 0)
+                    total = sum(stats.values())
+                    status = f"🔴 Опасно ({malicious}/{total})" if malicious > 0 else "🟢 Чисто"
+                    self.log(f"  Результат: {status}")
+                    self.scan_results.append([file_name, file_path, status, f"{malicious}/{total}"])
                 elif response.status_code == 404:
-                    self.log(f"[НЕ НАЙДЕН В БАЗЕ] {file_name}")
-                    self.scan_results.append({
-                        "FileName": file_name, "Path": file_path, "Status": "Not Found", "Malicious": 0, "SHA256": file_hash
-                    })
+                    self.log("  ⚪ Файл не найден в базе VirusTotal.")
+                    self.scan_results.append([file_name, file_path, "Не найден в базе", "-"])
                 elif response.status_code == 429:
-                    self.log(f"[ЛИМИТ API] Превышен лимит. Ожидание 60 секунд...")
-                    time.sleep(60)
+                    self.log("  ⚠️ Превышен лимит API (4 запроса в мин). Ждем 15 сек...")
+                    time.sleep(15)
                 else:
-                    self.log(f"[ОШИБКА API {response.status_code}] {file_name}")
-                    self.scan_results.append({
-                        "FileName": file_name, "Path": file_path, "Status": f"API Error {response.status_code}", "Malicious": 0, "SHA256": file_hash
-                    })
-
+                    self.log(f"  ❌ Ошибка API: {response.status_code}")
+                    self.scan_results.append([file_name, file_path, f"Ошибка {response.status_code}", "-"])
             except Exception as e:
-                self.log(f"[СБОЙ СЕТИ] {file_name}: {e}")
+                self.log(f"  ❌ Ошибка сети: {e}")
 
-            if idx < total_files:
-                time.sleep(15)
+            self.progress_bar.set(index / total_files)
+            time.sleep(15) # Пауза для бесплатного API (4 запроса в минуту)
 
-        self.log("\n" + "="*50 + "\n[*] Сканирование завершено!")
-        self.label_status.configure(text="Сканирование завершено")
-        self.reset_ui()
-
-    def reset_ui(self):
+        self.log("\n✅ Сканирование завершено!")
         self.btn_start.configure(state="normal")
-        self.btn_select_folder.configure(state="normal")
-        if len(self.scan_results) > 0:
+        if self.scan_results:
             self.btn_export.configure(state="normal")
 
-    def export_to_csv(self):
-        """Экспорт собранных результатов в CSV файл"""
-        if not self.scan_results:
-            messagebox.showwarning("Предупреждение", "Нет данных для экспорта!")
-            return
-
-        save_path = filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-            title="Сохранить отчет как..."
-        )
-
+    def export_csv(self):
+        save_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if save_path:
             try:
-                with open(save_path, mode='w', newline='', encoding='utf-8-sig') as file:
-                    writer = csv.DictWriter(file, fieldnames=["FileName", "Path", "Status", "Malicious", "SHA256"])
-                    writer.writeheader()
+                with open(save_path, mode='w', newline='', encoding='utf-8-sig') as f:
+                    writer = csv.writer(f, delimiter=';')
+                    writer.writerow(["Имя файла", "Полный путь", "Статус", "Детекты"])
                     writer.writerows(self.scan_results)
-                messagebox.showinfo("Успех", f"Отчет успешно сохранен в:\n{save_path}")
+                messagebox.showinfo("Успех", "Отчет успешно сохранен!")
             except Exception as e:
                 messagebox.showerror("Ошибка", f"Не удалось сохранить файл: {e}")
 
