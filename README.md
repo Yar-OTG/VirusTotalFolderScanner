@@ -61,7 +61,7 @@ A Python desktop application for batch scanning files in selected folders for ma
 ## 📥 Download Executable (`.exe`)
 
 You can download the standalone Windows executable that doesn't require Python installation:
-👉 **[Download VirusTotal Scanner v1.0.1](../../releases)**
+👉 **[Download VirusTotal Scanner v2.0](../../releases)**
 
 ---
 
